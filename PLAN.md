@@ -28,6 +28,8 @@ The repository already contains:
   - `Completeness_783.csv`
   - `Connectivity_783.parquet`
 - `quick_test_v783.py`: minimal v783 smoke test.
+- `neuron_lookup.py`: exact FlyWire v783 cell-type lookup.
+- `annotations/Supplemental_file1_neuron_annotations_v2.1.0.tsv`: FlyWire v783 annotations.
 - `.github/workflows/v783-smoke-test.yml`: GitHub Actions smoke-test workflow.
 
 ## Phase 1 — Verify the v783 model
@@ -38,15 +40,21 @@ Confirm that the current repository can run the published model with FlyWire v78
 
 ### Tasks
 
-- [ ] Run `quick_test_v783.py` locally.
-- [ ] Confirm that `Completeness_783.csv` loads successfully.
-- [ ] Confirm that `Connectivity_783.parquet` loads successfully.
-- [ ] Confirm that a valid FlyWire neuron ID maps into the model.
-- [ ] Run a 100 ms, single-trial simulation.
-- [ ] Confirm that a result parquet file is created.
-- [ ] Confirm that spike events can be read from the result.
-- [ ] Fix only issues required for v783 compatibility.
-- [ ] Document any compatibility changes.
+- [x] Run `quick_test_v783.py` locally.
+- [x] Confirm that `Completeness_783.csv` loads successfully.
+- [x] Confirm that `Connectivity_783.parquet` loads successfully.
+- [x] Confirm that a valid FlyWire neuron ID maps into the model.
+- [x] Run a 100 ms, single-trial simulation.
+- [x] Confirm that a result parquet file is created.
+- [x] Confirm that spike events can be read from the result.
+- [x] Fix only issues required for v783 compatibility.
+- [x] Document any compatibility changes.
+
+### Phase 1 verification
+
+`python3 quick_test_v783.py` passed. This environment does not provide a
+`python` command, so the equivalent `python3` interpreter was used; no model
+or v783 compatibility code changes were required.
 
 ### Completion condition
 
@@ -70,12 +78,19 @@ get_neurons("T3")
 
 ### Tasks
 
-- [ ] Add a FlyWire annotation / cell-type dataset compatible with v783.
-- [ ] Create `neuron_lookup.py`.
-- [ ] Implement exact cell-type lookup.
-- [ ] Return all matching FlyWire IDs.
-- [ ] Handle missing or ambiguous names explicitly.
-- [ ] Add tests for several known cell types.
+- [x] Add a FlyWire annotation / cell-type dataset compatible with v783.
+- [x] Create `neuron_lookup.py`.
+- [x] Implement exact cell-type lookup.
+- [x] Return all matching FlyWire IDs.
+- [x] Handle missing or ambiguous names explicitly.
+- [x] Add tests for several known cell types.
+
+### Phase 2 verification
+
+The vendored annotation table is FlyWire annotations v2.1.0, based on
+materialization 783. `get_neurons("L1")`, `get_neurons("L2")`, and
+`get_neurons("T3")` return 1,579, 1,554, and 1,615 model-compatible IDs,
+respectively. `python3 -m unittest -v test_neuron_lookup.py` passes.
 
 ### Completion condition
 
