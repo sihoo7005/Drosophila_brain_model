@@ -1,8 +1,9 @@
 import pandas as pd
+import numpy as np
 from textwrap import dedent
 
 # brian 2
-from brian2 import NeuronGroup, Synapses, PoissonInput, SpikeMonitor, Network
+from brian2 import NeuronGroup, Synapses, NetworkOperation, SpikeMonitor, Network
 from brian2 import mV, ms, Hz
 
 # file handling
@@ -56,7 +57,7 @@ default_params = {
 #######################
 # brian2 model setup
 def poi(neu, exc, exc2, params):
-    '''Create PoissonInput for neurons.
+    '''Create vectorized Poisson input for selected neurons.
 
     For each neuron in 'names' a PoissonInput is generated and 
     the refractory period of that neuron is set to 0 in NeuronGroup.
@@ -75,33 +76,32 @@ def poi(neu, exc, exc2, params):
     Returns
     -------
     pois : list
-        PoissonInput objects for each neuron in 'exc'
+        At most one NetworkOperation per non-empty activation class.
     neu : NeuronGroup
         NeuronGroup with adjusted refractory periods
     '''
 
     pois = []
-    for i in exc:
-        p = PoissonInput(
-            target=neu[i], 
-            target_var='v', 
-            N=1, 
-            rate=params['r_poi'], 
-            weight=params['w_syn']*params['f_poi']
-            )
-        neu[i].rfc = 0 * ms # no refractory period for Poisson targets
-        pois.append(p)
+    for indices, rate in ((exc, params['r_poi']), (exc2, params['r_poi2'])):
+        indices = np.asarray(indices, dtype=np.intp)
+        if not len(indices):
+            continue
 
-    for i in exc2:
-        p = PoissonInput(
-            target=neu[i], 
-            target_var='v', 
-            N=1, 
-            rate=params['r_poi2'], 
-            weight=params['w_syn']*params['f_poi']
-            )
-        neu[i].rfc = 0 * ms # no refractory period for Poisson targets
-        pois.append(p)
+        targets, multiplicity = np.unique(indices, return_counts=True)
+        neu.rfc[targets] = 0 * ms # no refractory period for Poisson targets
+        probability = float(rate * neu.clock.dt)
+        weight = params['w_syn'] * params['f_poi']
+
+        def make_input_operation(targets, multiplicity, probability, weight):
+            def apply_input():
+                events = np.random.binomial(multiplicity, probability)
+                neu.v[targets] += events * weight
+            return apply_input
+
+        pois.append(NetworkOperation(
+            make_input_operation(targets, multiplicity, probability, weight),
+            clock=neu.clock, when='synapses', order=0
+        ))
 
     return pois, neu
 

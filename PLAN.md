@@ -30,6 +30,7 @@ The repository already contains:
 - `quick_test_v783.py`: minimal v783 smoke test.
 - `neuron_lookup.py`: exact FlyWire v783 cell-type lookup.
 - `annotations/Supplemental_file1_neuron_annotations_v2.1.0.tsv`: FlyWire v783 annotations.
+- `simulate.py`: command-line simulation interface using cell-type names.
 - `.github/workflows/v783-smoke-test.yml`: GitHub Actions smoke-test workflow.
 
 ## Phase 1 — Verify the v783 model
@@ -114,16 +115,61 @@ python simulate.py --activate L1 --silence Mi1
 
 ### Tasks
 
-- [ ] Create `simulate.py`.
-- [ ] Resolve neuron names through `neuron_lookup.py`.
-- [ ] Pass resolved FlyWire IDs into `run_exp`.
-- [ ] Expose trial duration, trial count, and stimulation rate as explicit options.
-- [ ] Store experiment parameters with each run.
-- [ ] Use safe output naming and prevent accidental overwrites.
+- [x] Create `simulate.py`.
+- [x] Resolve neuron names through `neuron_lookup.py`.
+- [x] Pass resolved FlyWire IDs into `run_exp`.
+- [x] Expose trial duration, trial count, and stimulation rate as explicit options.
+- [x] Store experiment parameters with each run.
+- [x] Use safe output naming and prevent accidental overwrites.
+
+### Phase 3 verification
+
+The short integration test
+`python3 simulate.py --activate L1 --silence Mi1 --duration 1 --trials 1 --rate 0 --output results/phase3_test/l1_smoke.parquet`
+completed successfully. It created the parquet result and a same-stem JSON
+metadata file containing the dataset, cell-type names, resolved IDs, duration,
+trial count, and rate. Existing output paths are rejected instead of being
+overwritten.
 
 ### Completion condition
 
 A user can run an experiment using only neuron type names.
+
+---
+
+## Performance follow-up — Poisson stimulation memory
+
+The L1 / 150 Hz run was terminated by the OOM killer on a 3.3 GiB system. The
+old `poi()` created one `PoissonInput` and one Brian runner per stimulated
+neuron. Profiling a 138,639-neuron group showed 1,579 inputs increased RSS from
+173.5 MiB to 198.2 MiB and took about 25 seconds to construct.
+
+`poi()` now uses at most one vectorized `NetworkOperation` per activation-rate
+class. It samples `Binomial(k, rate * dt)` for each selected neuron, where `k`
+is the number of inputs targeting that neuron. This is the exact sum of the
+old `k` independent `Binomial(1, rate * dt)` inputs per time step, with the
+same synaptic weight, timing slot, and refractory-period handling.
+
+### Verification
+
+- [x] Profile stimulation object count, construction time, and RSS before/after.
+- [x] Compare legacy and vectorized event-count distributions on a toy subset.
+- [x] Preserve existing model parameters and connectivity.
+- [x] Add a regression test for the event-count distribution.
+
+With the vectorized implementation, the same profile used one operation, RSS
+increased by about 0.2 MiB, and construction took about 0.01 seconds. For 128
+toy neurons at 150 Hz over 100 ms, legacy versus vectorized execution took 3.96
+versus 0.23 seconds. Mean event counts were 15.375 versus 14.773 per neuron;
+the theoretical mean is 15 and both samples were within five standard errors.
+This subset check is a functional test, not a biological simulation result.
+
+The connectivity parquet has 15,091,983 rows and is 96.1 MiB on disk. Reading
+it into pandas used 921.1 MiB by DataFrame accounting and raised process RSS
+from about 110 MiB to 1,803 MiB. This shows that stimulation objects contribute
+to memory pressure but are not the only likely source of the OOM. The full
+connectome simulation was not repeated on the constrained system; the memory
+peak while Brian constructs all synapses remains to be profiled separately.
 
 ---
 
